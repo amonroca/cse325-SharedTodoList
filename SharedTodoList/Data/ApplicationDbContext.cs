@@ -1,13 +1,17 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace SharedTodoList.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
     public DbSet<TodoList> TodoLists => Set<TodoList>();
     public DbSet<ListMember> ListMembers => Set<ListMember>();
     public DbSet<TodoTask> TodoTasks => Set<TodoTask>();
+
+    // Keys that encrypt sign-in cookies; stored in the DB so logins survive restarts and redeploys.
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

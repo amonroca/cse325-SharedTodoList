@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: shared-todo-list
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /Account/Login
+    envVars:
+      # Set this in the Render dashboard; it is never stored in the repo.
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
