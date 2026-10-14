@@ -23,3 +23,17 @@ The application will allow users to create, manage, and share tasks with classma
 - **Families:** Manage household chores and responsibilities collaboratively.
 - **Coworkers/Teams:** Track shared work tasks and deadlines.
 - **General Users:** Anyone needing a straightforward tool to manage and share to‑do lists.
+
+## Tech Stack
+
+- **Frontend:** React + TypeScript (Vite) — `client/`
+- **Backend:** Node.js + Express + TypeScript — `server/`
+- **Database:** PostgreSQL (Neon)
+
+## Running Locally
+
+1. Install dependencies: `npm run install:all`
+2. Copy `server/.env.example` to `server/.env` and set `DATABASE_URL` and `JWT_SECRET`.
+3. Create the tables (optional; the server also does this on start): `npm run db:init`
+4. Start both apps: `npm run dev`
+5. Open http://localhost:5173
