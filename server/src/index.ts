@@ -2,6 +2,8 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import express, { type Response } from 'express';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { requireAuth, signToken, type AuthedRequest } from './auth.js';
 import { pool, schema } from './db.js';
 
@@ -224,7 +226,17 @@ app.delete('/api/tasks/:id', requireAuth, handle(async (req, res) => {
   res.status(204).end();
 }));
 
+// In production, serve the built React app and let it handle client-side routes.
+const clientDist = path.resolve(import.meta.dirname, '../../client/dist');
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 // Make sure tables exist, then start listening.
 await pool.query(schema);
 const port = Number(process.env.PORT ?? 4000);
-app.listen(port, () => console.log(`API listening on http://localhost:${port}`));
+app.listen(port, () => console.log(`Server listening on http://localhost:${port}`));

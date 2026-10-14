@@ -4,7 +4,9 @@
   "scripts": {
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
     "db:init": "npm --prefix server run db:init",
-    "dev": "concurrently -n api,web -c blue,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\""
+    "dev": "concurrently -n api,web -c blue,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
