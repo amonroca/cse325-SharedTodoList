@@ -1,0 +1,40 @@
+<form class="composer" @onsubmit="Submit">
+    <span class="composer-plus"><Icon Name="plus" /></span>
+    <input class="composer-input" @bind="title" @bind:event="oninput" placeholder="Add a task and press Enter"
+           aria-label="New task title" maxlength="200" />
+    <div class="composer-meta">
+        <input type="date" @bind="dueDate" aria-label="Due date" />
+        <select @bind="priority" aria-label="Priority">
+            <option value="@TaskPriority.Low">Low</option>
+            <option value="@TaskPriority.Medium">Medium</option>
+            <option value="@TaskPriority.High">High</option>
+        </select>
+        <button type="submit" class="btn btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(title))">Add</button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public Func<string, DateOnly?, TaskPriority, Task> OnAdd { get; set; } = default!;
+
+    private string title = "";
+    private DateOnly? dueDate;
+    private TaskPriority priority = TaskPriority.Medium;
+    private bool busy;
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(title)) return;
+        busy = true;
+        try
+        {
+            await OnAdd(title, dueDate, priority);
+            title = "";
+            dueDate = null;
+            priority = TaskPriority.Medium;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

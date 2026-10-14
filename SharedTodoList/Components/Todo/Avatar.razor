@@ -1,0 +1,13 @@
+<span class="avatar" title="@Name" style="width:@(Size)px;height:@(Size)px;background:@Color;font-size:@(Size * 0.4)px">@Initials</span>
+
+@code {
+    private static readonly string[] Palette = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#8b5cf6", "#ef4444", "#14b8a6"];
+
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter] public int Size { get; set; } = 32;
+
+    private string Initials => string.Concat(
+        Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    private string Color => Palette[Name.Sum(c => c) % Palette.Length];
+}

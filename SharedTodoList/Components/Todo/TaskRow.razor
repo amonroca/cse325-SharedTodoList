@@ -1,0 +1,99 @@
+@if (editing)
+{
+    <li class="task editing">
+        <form class="task-edit" @onsubmit="Save">
+            <input @ref="titleInput" @bind="title" @bind:event="oninput" aria-label="Title" maxlength="200" />
+            <textarea @bind="notes" placeholder="Notes (optional)" rows="2"></textarea>
+            <div class="task-edit-row">
+                <input type="date" @bind="dueDate" aria-label="Due date" />
+                <select @bind="priority" aria-label="Priority">
+                    <option value="@TaskPriority.Low">Low</option>
+                    <option value="@TaskPriority.Medium">Medium</option>
+                    <option value="@TaskPriority.High">High</option>
+                </select>
+                <span class="spacer"></span>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => editing = false">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm" disabled="@string.IsNullOrWhiteSpace(title)">Save</button>
+            </div>
+        </form>
+    </li>
+}
+else
+{
+    var overdue = !Item.Completed && DueDates.IsOverdue(Item.DueDate);
+    <li class="task @(Item.Completed ? "done" : "")">
+        <button class="checkbox @(Item.Completed ? "checked" : "")" @onclick="OnToggle"
+                aria-label="@(Item.Completed ? "Mark as not done" : "Mark as done")">
+            <Icon Name="check" Size="14" />
+        </button>
+
+        <div class="task-body" @ondblclick="StartEditing">
+            <div class="task-title">@Item.Title</div>
+            @if (!string.IsNullOrEmpty(Item.Notes))
+            {
+                <div class="task-notes">@Item.Notes</div>
+            }
+            <div class="task-meta">
+                <span class="priority @Item.Priority.ToString().ToLowerInvariant()">
+                    <Icon Name="flag" Size="12" /> @Item.Priority
+                </span>
+                @if (Item.DueDate is { } due)
+                {
+                    <span class="due @(overdue ? "overdue" : "")">
+                        <Icon Name="calendar" Size="12" /> @(overdue ? "Overdue · " : "")@DueDates.Format(due)
+                    </span>
+                }
+                @if (Item.CreatedBy is not null)
+                {
+                    <span class="muted">by @Item.CreatedBy.DisplayName</span>
+                }
+            </div>
+        </div>
+
+        <div class="task-actions">
+            <button class="icon-btn" @onclick="StartEditing" aria-label="Edit task" title="Edit"><Icon Name="edit" Size="16" /></button>
+            <button class="icon-btn danger" @onclick="OnDelete" aria-label="Delete task" title="Delete"><Icon Name="trash" Size="16" /></button>
+        </div>
+    </li>
+}
+
+@code {
+    [Parameter, EditorRequired] public TodoTask Item { get; set; } = default!;
+    [Parameter] public EventCallback OnToggle { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter, EditorRequired] public Func<string, string, DateOnly?, TaskPriority, Task> OnSave { get; set; } = default!;
+
+    private ElementReference titleInput;
+    private bool editing;
+    private bool focusPending;
+    private string title = "";
+    private string notes = "";
+    private DateOnly? dueDate;
+    private TaskPriority priority;
+
+    private void StartEditing()
+    {
+        title = Item.Title;
+        notes = Item.Notes;
+        dueDate = Item.DueDate;
+        priority = Item.Priority;
+        editing = true;
+        focusPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusPending)
+        {
+            focusPending = false;
+            await titleInput.FocusAsync();
+        }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(title)) return;
+        await OnSave(title, notes, dueDate, priority);
+        editing = false;
+    }
+}

@@ -1,0 +1,76 @@
+<Modal Title="@Title" OnClose="OnClose">
+    <form class="dialog-body" @onsubmit="Submit">
+        <label class="field">
+            <span>Name</span>
+            <input @ref="nameInput" @bind="name" @bind:event="oninput" placeholder="e.g. Group project" maxlength="100" />
+        </label>
+        <div class="field">
+            <span>Color</span>
+            <div class="swatches">
+                @foreach (var c in Colors)
+                {
+                    <button type="button" class="swatch @(c == color ? "selected" : "")" style="background:@c"
+                            @onclick="() => color = c" aria-label="Color @c"></button>
+                }
+            </div>
+        </div>
+        @if (error is not null)
+        {
+            <div class="alert">@error</div>
+        }
+        <footer class="dialog-footer">
+            <button type="button" class="btn btn-ghost" @onclick="OnClose">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(name))">
+                @(busy ? "Saving…" : SubmitLabel)
+            </button>
+        </footer>
+    </form>
+</Modal>
+
+@code {
+    public static readonly string[] Colors = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#8b5cf6", "#ef4444", "#64748b"];
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string SubmitLabel { get; set; } = "";
+    [Parameter] public string InitialName { get; set; } = "";
+    [Parameter] public string? InitialColor { get; set; }
+    [Parameter, EditorRequired] public Func<string, string, Task> OnSubmit { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference nameInput;
+    private string name = "";
+    private string color = Colors[0];
+    private string? error;
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        name = InitialName;
+        color = InitialColor ?? Colors[0];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await nameInput.FocusAsync();
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        busy = true;
+        error = null;
+        try
+        {
+            await OnSubmit(name, color);
+            await OnClose.InvokeAsync();
+        }
+        catch (TodoException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

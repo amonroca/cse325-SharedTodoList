@@ -37,3 +37,42 @@ The application will allow users to create, manage, and share tasks with classma
 3. Create the tables (optional; the server also does this on start): `npm run db:init`
 4. Start both apps: `npm run dev`
 5. Open http://localhost:5173
+
+## Tech Stack
+
+- **Framework:** ASP.NET Core Blazor Web App (.NET 10, Interactive Server rendering)
+- **Authentication:** ASP.NET Core Identity
+- **Database:** PostgreSQL (Neon) with Entity Framework Core (Npgsql)
+- **Real-time collaboration:** changes are pushed to every open dashboard through Blazor Server's live connection
+
+## Running Locally
+
+1. Install the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+2. Restore the local tools (includes `dotnet-ef`):
+   ```bash
+   dotnet tool restore
+   ```
+3. Set the database connection string (stored outside the repo with user-secrets, ask the team for the value):
+   ```bash
+   cd SharedTodoList
+   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=...;Database=...;Username=...;Password=...;SSL Mode=VerifyFull"
+   ```
+4. Run the app (database tables are created automatically on startup):
+   ```bash
+   dotnet watch
+   ```
+5. Open http://localhost:5051
+
+## Project Structure
+
+- `SharedTodoList/Data/` — EF Core models (`TodoList`, `ListMember`, `TodoTask`), `ApplicationDbContext`, and migrations
+- `SharedTodoList/Services/TodoService.cs` — all list/task/sharing logic with permission checks
+- `SharedTodoList/Components/Pages/Home.razor` — the main dashboard
+- `SharedTodoList/Components/Todo/` — reusable UI components (task row, dialogs, composer)
+- `SharedTodoList/Components/Account/` — login, registration, and account management (Identity)
+- `SharedTodoList/wwwroot/app.css` — app styles (light and dark mode)
+
+To change the database schema, edit the models and run:
+```bash
+dotnet ef migrations add <Name> --project SharedTodoList --output-dir Data/Migrations
+```

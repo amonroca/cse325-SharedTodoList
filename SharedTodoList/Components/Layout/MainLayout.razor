@@ -1,0 +1,38 @@
+@inherits LayoutComponentBase
+
+<div class="app">
+    <header class="appbar">
+        <a class="brand" href="">
+            <span class="brand-mark"><Icon Name="check" Size="18" /></span>
+            Shared Todo
+        </a>
+        <AuthorizeView>
+            <Authorized>
+                @{
+                    var name = context.User.FindFirst(AppClaimsPrincipalFactory.DisplayNameClaim)?.Value ?? context.User.Identity?.Name ?? "";
+                }
+                <div class="appbar-user">
+                    <a class="user-chip" href="Account/Manage" title="Account settings">
+                        <Avatar Name="@name" Size="30" />
+                        <span class="hide-sm">@name</span>
+                    </a>
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="" />
+                        <button type="submit" class="icon-btn" title="Sign out" aria-label="Sign out"><Icon Name="logout" /></button>
+                    </form>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </header>
+
+    <main class="app-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

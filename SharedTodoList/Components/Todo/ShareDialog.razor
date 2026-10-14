@@ -1,0 +1,108 @@
+@inject TodoService Todos
+
+<Modal Title="@($"Share “{ListName}”")" OnClose="OnClose">
+    <div class="dialog-body">
+        @if (IsOwner)
+        {
+            <form class="invite-row" @onsubmit="Invite">
+                <input @ref="emailInput" type="email" @bind="email" @bind:event="oninput" placeholder="Invite by email" />
+                <button type="submit" class="btn btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(email))">
+                    @(busy ? "Adding…" : "Invite")
+                </button>
+            </form>
+        }
+        else
+        {
+            <p class="muted small">Only the owner can invite people to this list.</p>
+        }
+
+        @if (error is not null)
+        {
+            <div class="alert">@error</div>
+        }
+
+        <h3 class="section-label">People with access</h3>
+        <ul class="member-list">
+            @foreach (var m in members)
+            {
+                var isMe = m.UserId == CurrentUserId;
+                <li>
+                    <Avatar Name="@m.Name" />
+                    <div class="member-info">
+                        <strong>@m.Name@(isMe ? " (you)" : "")</strong>
+                        <span class="muted small">@m.Email</span>
+                    </div>
+                    <span class="role-badge @m.Role.ToString().ToLowerInvariant()">@m.Role</span>
+                    @if (m.Role != ListRole.Owner && (IsOwner || isMe))
+                    {
+                        <button class="btn btn-ghost btn-sm danger" @onclick="() => Remove(m)">@(isMe ? "Leave" : "Remove")</button>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public int ListId { get; set; }
+    [Parameter, EditorRequired] public string ListName { get; set; } = "";
+    [Parameter, EditorRequired] public bool IsOwner { get; set; }
+    [Parameter, EditorRequired] public string CurrentUserId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnLeft { get; set; }
+
+    private ElementReference emailInput;
+    private List<MemberInfo> members = [];
+    private string email = "";
+    private string? error;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && IsOwner) await emailInput.FocusAsync();
+    }
+
+    private async Task Load() => members = await Todos.GetMembersAsync(CurrentUserId, ListId);
+
+    private async Task Invite()
+    {
+        if (string.IsNullOrWhiteSpace(email)) return;
+        busy = true;
+        error = null;
+        try
+        {
+            await Todos.AddMemberAsync(CurrentUserId, ListId, email);
+            email = "";
+            await Load();
+        }
+        catch (TodoException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Remove(MemberInfo member)
+    {
+        error = null;
+        try
+        {
+            await Todos.RemoveMemberAsync(CurrentUserId, ListId, member.UserId);
+            if (member.UserId == CurrentUserId)
+            {
+                await OnLeft.InvokeAsync();
+                return;
+            }
+            await Load();
+        }
+        catch (TodoException ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

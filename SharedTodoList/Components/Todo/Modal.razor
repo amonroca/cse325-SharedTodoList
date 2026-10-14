@@ -1,0 +1,15 @@
+<div class="dialog-backdrop" @onclick="OnClose">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="@Title" @onclick:stopPropagation="true">
+        <header class="dialog-header">
+            <h2>@Title</h2>
+            <button class="icon-btn" @onclick="OnClose" aria-label="Close"><Icon Name="x" /></button>
+        </header>
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

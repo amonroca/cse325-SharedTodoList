@@ -1,0 +1,27 @@
+@inherits LayoutComponentBase
+
+<div class="auth-page">
+    <section class="auth-hero">
+        <div class="brand">
+            <span class="brand-mark"><Icon Name="check" Size="20" /></span>
+            Shared Todo
+        </div>
+        <h2>Get things done, together.</h2>
+        <p>Create task lists and share them with classmates, coworkers, or family. Everyone stays on the same page.</p>
+        <ul class="hero-points">
+            <li><Icon Name="list" /> Organize tasks into lists</li>
+            <li><Icon Name="users" /> Share lists by email, updates appear live</li>
+            <li><Icon Name="calendar" /> Track due dates and priorities</li>
+        </ul>
+    </section>
+
+    <section class="auth-card-wrap">
+        @Body
+    </section>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

@@ -1,0 +1,315 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+@using System.Security.Claims
+@inject TodoService Todos
+@inject ListChangeNotifier Notifier
+
+<PageTitle>@(activeList?.Name ?? "My lists") · Shared Todo</PageTitle>
+
+<div class="dashboard">
+    <aside class="sidebar @(sidebarOpen ? "open" : "")">
+        <div class="sidebar-top mobile-only">
+            <strong>Lists</strong>
+            <button class="icon-btn" @onclick="() => sidebarOpen = false" aria-label="Close menu"><Icon Name="x" /></button>
+        </div>
+
+        <button class="btn btn-primary btn-block" @onclick="() => dialog = Dialog.NewList">
+            <Icon Name="plus" Size="16" /> New list
+        </button>
+
+        <nav class="list-nav">
+            <h3 class="section-label">My lists</h3>
+            <ul>
+                @foreach (var l in lists.Where(l => l.Role == ListRole.Owner))
+                {
+                    @ListLink(l)
+                }
+            </ul>
+            @if (!lists.Any(l => l.Role == ListRole.Owner))
+            {
+                <p class="muted small pad">No lists yet.</p>
+            }
+
+            @if (lists.Any(l => l.Role != ListRole.Owner))
+            {
+                <h3 class="section-label">Shared with me</h3>
+                <ul>
+                    @foreach (var l in lists.Where(l => l.Role != ListRole.Owner))
+                    {
+                        @ListLink(l)
+                    }
+                </ul>
+            }
+        </nav>
+    </aside>
+    @if (sidebarOpen)
+    {
+        <div class="scrim" @onclick="() => sidebarOpen = false"></div>
+    }
+
+    <section class="main">
+        <header class="topbar">
+            <button class="icon-btn mobile-only" @onclick="() => sidebarOpen = true" aria-label="Open lists"><Icon Name="menu" /></button>
+            @if (activeList is not null)
+            {
+                <div class="title-block">
+                    <h1><span class="list-dot lg" style="background:@activeList.Color"></span>@activeList.Name</h1>
+                    <p class="muted small">
+                        @(tasks.Count - DoneCount) open · @DoneCount done
+                        @if (activeList.MemberCount > 1)
+                        {
+                            <text> · shared with @(activeList.MemberCount - 1)</text>
+                        }
+                    </p>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-ghost" @onclick="() => dialog = Dialog.Share">
+                        <Icon Name="share" Size="16" /> <span class="hide-sm">Share</span>
+                    </button>
+                    @if (activeList.Role == ListRole.Owner)
+                    {
+                        <button class="icon-btn" @onclick="() => dialog = Dialog.EditList" aria-label="Edit list" title="Edit list"><Icon Name="edit" /></button>
+                        <button class="icon-btn danger" @onclick="() => dialog = Dialog.DeleteList" aria-label="Delete list" title="Delete list"><Icon Name="trash" /></button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="title-block"><h1>My lists</h1></div>
+            }
+        </header>
+
+        @if (error is not null)
+        {
+            <div class="alert dismissable">
+                @error
+                <button class="icon-btn" @onclick="() => error = null" aria-label="Dismiss"><Icon Name="x" Size="16" /></button>
+            </div>
+        }
+
+        @if (!loaded)
+        {
+            <div class="empty"><div class="spinner"></div></div>
+        }
+        else if (activeList is null)
+        {
+            <div class="empty big">
+                <div class="empty-icon"><Icon Name="list" Size="32" /></div>
+                <h3>Create your first list</h3>
+                <p class="muted">Lists keep related tasks together. Share them with anyone who has an account.</p>
+                <button class="btn btn-primary" @onclick="() => dialog = Dialog.NewList"><Icon Name="plus" Size="16" /> New list</button>
+            </div>
+        }
+        else
+        {
+            <div class="content">
+                <div class="meter" aria-label="@Progress% complete">
+                    <div class="meter-fill" style="width:@(Progress)%;background:@activeList.Color"></div>
+                </div>
+
+                <TaskComposer OnAdd="AddTask" />
+
+                <div class="toolbar">
+                    <div class="segmented" role="tablist">
+                        @foreach (var f in Enum.GetValues<Filter>())
+                        {
+                            <button role="tab" aria-selected="@(filter == f)" class="@(filter == f ? "on" : "")" @onclick="() => filter = f">@f</button>
+                        }
+                    </div>
+                    <label class="search">
+                        <Icon Name="search" Size="16" />
+                        <input @bind="search" @bind:event="oninput" placeholder="Search tasks" />
+                    </label>
+                </div>
+
+                @if (VisibleTasks.Count == 0)
+                {
+                    <div class="empty">
+                        <div class="empty-icon"><Icon Name="check" Size="28" /></div>
+                        <h3>@(tasks.Count == 0 ? "No tasks yet" : "Nothing here")</h3>
+                        <p class="muted">@(tasks.Count == 0 ? "Add your first task above to get started." : "Try a different filter or search.")</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="task-list">
+                        @foreach (var t in VisibleTasks)
+                        {
+                            <TaskRow @key="t.Id" Item="t"
+                                     OnToggle="() => Run(() => Todos.SetCompletedAsync(userId, t.Id, !t.Completed))"
+                                     OnDelete="() => Run(() => Todos.DeleteTaskAsync(userId, t.Id))"
+                                     OnSave="(title, notes, due, priority) => Run(() => Todos.UpdateTaskAsync(userId, t.Id, title, notes, due, priority))" />
+                        }
+                    </ul>
+                }
+
+                @if (DoneCount > 0 && filter != Filter.Active)
+                {
+                    <button class="link-btn clear-done" @onclick="() => Run(() => Todos.ClearCompletedAsync(userId, activeList.Id))">
+                        Clear @DoneCount completed
+                    </button>
+                }
+            </div>
+        }
+    </section>
+</div>
+
+@switch (dialog)
+{
+    case Dialog.NewList:
+        <ListDialog Title="New list" SubmitLabel="Create list" OnClose="CloseDialog" OnSubmit="CreateList" />
+        break;
+    case Dialog.EditList when activeList is not null:
+        <ListDialog Title="Edit list" SubmitLabel="Save" InitialName="@activeList.Name" InitialColor="@activeList.Color"
+                    OnClose="CloseDialog" OnSubmit="(name, color) => Todos.UpdateListAsync(userId, activeList.Id, name, color)" />
+        break;
+    case Dialog.Share when activeList is not null:
+        <ShareDialog ListId="activeList.Id" ListName="@activeList.Name" IsOwner="activeList.Role == ListRole.Owner"
+                     CurrentUserId="@userId" OnClose="CloseDialog" OnLeft="LeftList" />
+        break;
+    case Dialog.DeleteList when activeList is not null:
+        <Modal Title="Delete list?" OnClose="CloseDialog">
+            <div class="dialog-body">
+                <p>
+                    <strong>@activeList.Name</strong> and its @activeList.TaskCount task@(activeList.TaskCount == 1 ? "" : "s")
+                    will be permanently deleted for everyone it's shared with.
+                </p>
+                <footer class="dialog-footer">
+                    <button class="btn btn-ghost" @onclick="CloseDialog">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteList">Delete list</button>
+                </footer>
+            </div>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Filter { All, Active, Done }
+    private enum Dialog { None, NewList, EditList, Share, DeleteList }
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string userId = "";
+    private List<ListSummary> lists = [];
+    private List<TodoTask> tasks = [];
+    private int? activeId;
+    private bool loaded;
+    private Filter filter = Filter.All;
+    private string search = "";
+    private Dialog dialog;
+    private bool sidebarOpen;
+    private string? error;
+
+    private ListSummary? activeList => lists.FirstOrDefault(l => l.Id == activeId);
+    private int DoneCount => tasks.Count(t => t.Completed);
+    private int Progress => tasks.Count == 0 ? 0 : DoneCount * 100 / tasks.Count;
+
+    private List<TodoTask> VisibleTasks => tasks
+        .Where(t => filter switch { Filter.Active => !t.Completed, Filter.Done => t.Completed, _ => true })
+        .Where(t => string.IsNullOrWhiteSpace(search)
+                    || t.Title.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || t.Notes.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private RenderFragment ListLink(ListSummary l) =>
+        @<li>
+            <button class="list-link @(l.Id == activeId ? "active" : "")" @onclick="() => SelectList(l.Id)">
+                <span class="list-dot" style="background:@l.Color"></span>
+                <span class="list-name">@l.Name</span>
+                @if (l.MemberCount > 1)
+                {
+                    <Icon Name="users" Size="14" />
+                }
+                <span class="count">@(l.TaskCount - l.DoneCount)</span>
+            </button>
+        </li>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        Notifier.ListChanged += OnListChanged;
+        await Reload();
+        loaded = true;
+    }
+
+    // Re-reads lists and the active list's tasks. Used after every change, ours or a collaborator's.
+    private async Task Reload()
+    {
+        lists = await Todos.GetListsAsync(userId);
+        if (activeId is null || lists.All(l => l.Id != activeId))
+            activeId = lists.FirstOrDefault()?.Id;
+        tasks = activeId is int id ? await Todos.GetTasksAsync(userId, id) : [];
+    }
+
+    private void OnListChanged(int listId) => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            await Reload();
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // Ignore: the next change or user action will refresh again.
+        }
+    });
+
+    private async Task SelectList(int id)
+    {
+        activeId = id;
+        sidebarOpen = false;
+        filter = Filter.All;
+        search = "";
+        await Run(() => Task.CompletedTask);
+    }
+
+    // Runs an action, shows friendly errors, and refreshes the data.
+    private async Task Run(Func<Task> action)
+    {
+        error = null;
+        try
+        {
+            await action();
+        }
+        catch (TodoException ex)
+        {
+            error = ex.Message;
+        }
+        await Reload();
+    }
+
+    private Task AddTask(string title, DateOnly? dueDate, TaskPriority priority) =>
+        Run(() => Todos.AddTaskAsync(userId, activeId!.Value, title, dueDate, priority));
+
+    private async Task CreateList(string name, string color)
+    {
+        activeId = await Todos.CreateListAsync(userId, name, color);
+        sidebarOpen = false;
+    }
+
+    private async Task DeleteList()
+    {
+        var id = activeId!.Value;
+        dialog = Dialog.None;
+        activeId = null;
+        await Run(() => Todos.DeleteListAsync(userId, id));
+    }
+
+    private async Task LeftList()
+    {
+        dialog = Dialog.None;
+        activeId = null;
+        await Reload();
+    }
+
+    private async Task CloseDialog()
+    {
+        dialog = Dialog.None;
+        await Reload();
+    }
+
+    public void Dispose() => Notifier.ListChanged -= OnListChanged;
+}
