@@ -1,0 +1,36 @@
+mutation RegisterUser @auth(level: USER_EMAIL_VERIFIED) {
+  user_insert(data: {
+    uid_expr: "auth.uid"
+    email_expr: "auth.token.email"
+    displayName_expr: "auth.token.name"
+  })
+}
+
+
+mutation CreateTodoList(
+  $title: String!
+  $description: String
+) @auth(level: USER) @transaction {
+
+  # Find the authenticated user's database ID.
+  query
+  @check(
+    expr: "response.query.users.size() == 1"
+    message: "Authenticated user profile not found."
+  )
+  @redact {
+    users(where: {
+      uid: { eq_expr: "auth.uid" }
+    }) {
+      id
+    }
+  }
+
+  # Create a list owned by the authenticated user.
+  todoList_insert(data: {
+    title: $title
+    description: $description
+    ownerId_expr: "response.query.users[0].id"
+  })
+}
+

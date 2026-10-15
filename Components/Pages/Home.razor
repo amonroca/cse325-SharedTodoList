@@ -1,7 +1,141 @@
-﻿@page "/"
+﻿
+@page "/"
+@rendermode InteractiveServer
+@using cse325_SharedTodoList.Models
+@using cse325_SharedTodoList.Services
+@inject TodoListService TodoService
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Home - SharedTodoList</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="dashboard">
 
-Welcome to your new app.
+    <div class="dashboard-header">
+        <div>
+            <h1>Welcome</h1>
+            <p>Here is a summary of your activities.</p>
+        </div>
+    </div>
+
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span>My Lists</span>
+            <h2>@TodoService.GetTotalLists()</h2>
+        </div>
+
+        <div class="stat-card">
+            <span>Pending Tasks</span>
+            <h2>@TodoService.GetPendingTasks()</h2>
+        </div>
+
+        <div class="stat-card">
+            <span>Completed Tasks</span>
+            <h2>@TodoService.GetCompletedTasks()</h2>
+        </div>
+    </div>
+
+
+    <div class="section-header">
+        <h2>My lists</h2>
+        <button class="new-list-button" @onclick=ShowForm>
+            + New list
+        </button>
+    </div>
+
+    
+    @if (showForm)
+    {
+        <div class="new-list-form">
+            <h3>Create New List</h3>
+
+            <input
+                type="text"
+                placeholder="List Name"
+                @bind="listName" />
+
+            <textarea
+                placeholder="Description (optional)"
+                @bind="listDescription">
+            </textarea>
+
+            <div class="form-actions">
+                <button @onclick="Cancel">
+                    Cancel
+                </button>
+
+                <button @onclick="CreateList"
+                        disabled="@string.IsNullOrWhiteSpace(listName)">
+                    Save List
+                </button>
+            </div>
+        </div>
+    }
+
+    <div class="lists-grid">
+        @foreach (var list in Lists)
+        {
+            <div class="list-card">
+                <h3>@list.Title</h3>
+
+                @if (!string.IsNullOrEmpty(list.Description))
+                {
+                    <p>@list.Description</p>
+                }
+
+                <p>
+                    @list.CompletedTasks of @list.TotalTasks
+                    tasks completed
+                </p>
+
+                <progress
+                    value="@list.CompletedTasks"
+                    max="@Math.Max(list.TotalTasks, 1)">
+                </progress>
+                <a class="open-list-button"
+                    href="@($"/lists/{list.Id}")">
+                    Open List →
+                </a>
+            </div>
+        }
+    </div>
+
+</div>
+
+
+@code {
+    private bool showForm = false;
+    private string listName = string.Empty;
+    private string listDescription = string.Empty;
+
+    private IReadOnlyList<TodoListModel> Lists =>
+        TodoService.GetLists();
+
+    private void ShowForm()
+    {
+        showForm = true;
+    }
+
+    private void Cancel()
+    {
+        showForm = false;
+        listName = string.Empty;
+        listDescription = string.Empty;
+    }
+
+    private void CreateList()
+    {
+        if (string.IsNullOrWhiteSpace(listName))
+        {
+            return;
+        }
+
+        TodoService.CreateList(
+            listName,
+            listDescription
+        );
+
+        Cancel();
+    }
+}

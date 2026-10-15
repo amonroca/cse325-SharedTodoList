@@ -1,0 +1,24 @@
+{
+  "name": "sharedtodolist-samuel",
+  "version": "1.0.0",
+  "description": "The application will allow users to create, manage, and share tasks with classmates, coworkers, or family members. This idea was chosen because it meets the assignment’s requirements (user authentication and CRUD functionality) while remaining simple enough to complete within the given timeframe.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:firebase": "esbuild src/firebaseClient.js --bundle --format=esm --platform=browser --outfile=wwwroot/js/firebaseClient.bundle.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "firebase": "^13.0.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

@@ -1,23 +1,86 @@
-﻿@inherits LayoutComponentBase
+﻿
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+<div class="app-layout">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <span class="brand-icon">✓</span>
+            <span>SharedTodoList</span>
         </div>
 
-        <article class="content px-4">
+        <nav class="sidebar-nav">
+            <NavLink href="/" Match="NavLinkMatch.All">
+                <span>⌂</span> Home
+            </NavLink>
+
+            <NavLink href="/lists">
+                <span>☷</span> My lists
+            </NavLink>
+
+            <NavLink href="/shared">
+                <span>♧</span> Shared lists
+            </NavLink>
+
+            <NavLink href="/settings">
+                <span>⚙</span> Configuration
+            </NavLink>
+        </nav>
+
+        
+        <div class="sidebar-footer">
+            <AuthorizeView>
+                <Authorized Context="authContext">
+                    @{
+                        var user = authContext.User;
+
+                        var displayName =
+                            user.Identity?.Name ?? "User";
+
+                        var email = user.FindFirst(
+                            System.Security.Claims.ClaimTypes.Email)?.Value
+                            ?? string.Empty;
+
+                        var initial = displayName.Length > 0
+                            ? displayName[0].ToString().ToUpperInvariant()
+                            : "U";
+                    }
+
+                    <div class="user-profile">
+                        <div class="user-avatar">@initial</div>
+
+                        <div class="user-details">
+                            <strong>@displayName</strong>
+                            <small>@email</small>
+                        </div>
+                    </div>
+
+                    <SignOutButton />
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </aside>
+
+    <div class="main-container">
+        <header class="topbar">
+            <span>Organize your tasks easily</span>
+            <button class="login-button">
+                Login
+            </button>
+        </header>
+
+        <main class="page-content">
             @Body
-        </article>
-    </main>
+        </main>
+    </div>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+
+@code {
+
+}
+

@@ -1,0 +1,46 @@
+
+@rendermode InteractiveServer
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<button class="signout-button"
+        @onclick="SignOut">
+    Sign Out
+</button>
+
+@code {
+    private IJSObjectReference? firebaseModule;
+
+    private async Task SignOut()
+    {
+
+        try
+        {
+            firebaseModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/js/firebaseClient.bundle.js");
+
+            await firebaseModule.InvokeVoidAsync("signOutSession");
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG: Sign out error: {ex}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (firebaseModule is not null)
+        {
+            try
+            {
+                await firebaseModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The Blazor circuit has already disconnected.
+            }
+        }
+    }
+}

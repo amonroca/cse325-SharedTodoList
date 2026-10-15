@@ -1,0 +1,160 @@
+
+@page "/dataconnect-test"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using Microsoft.JSInterop
+@using System.Text.Json
+@implements IAsyncDisposable
+
+@inject IJSRuntime JS
+
+<PageTitle>Data Connect Test - SharedTodoList</PageTitle>
+
+<h1>Firebase Data Connect Test</h1>
+
+<p>Test the connection to your Firebase user profile.</p>
+
+<button @onclick="FetchUser" disabled="@isLoading">
+    @(isLoading ? "Loading..." : "Fetch Current User")
+</button>
+
+<button @onclick="RegisterCurrentUser"
+        disabled="@isLoading">
+    Register Current User
+</button>
+
+<button @onclick="FetchLists" disabled="@isLoading">
+    Fetch My Lists
+</button>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p role="alert" style="color: #dc2626;">
+        @errorMessage
+    </p>
+}
+
+@if (!string.IsNullOrEmpty(responseJson))
+{
+    <h3>Query Result</h3>
+
+    <pre>@responseJson</pre>
+}
+
+@code {
+    private IJSObjectReference? firebaseModule;
+    private bool isLoading;
+    private string? errorMessage;
+    private string? responseJson;
+
+    private async Task FetchUser()
+    {
+        isLoading = true;
+        errorMessage = null;
+        responseJson = null;
+
+        try
+        {
+            firebaseModule ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/js/firebaseClient.bundle.js");
+
+            var result = await firebaseModule.InvokeAsync<JsonElement>(
+                "fetchCurrentUser");
+
+            responseJson = JsonSerializer.Serialize(
+                result,
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+        }
+        catch (JSException ex)
+        {
+            errorMessage = $"Data Connect error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (firebaseModule is not null)
+        {
+            try
+            {
+                await firebaseModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The Blazor connection has already disconnected.
+            }
+        }
+    }
+    
+private async Task RegisterCurrentUser()
+{
+    isLoading = true;
+    errorMessage = null;
+    responseJson = null;
+
+    try
+    {
+        firebaseModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/js/firebaseClient.bundle.js");
+
+        var result = await firebaseModule.InvokeAsync<JsonElement>(
+            "createUserProfile");
+
+        responseJson = JsonSerializer.Serialize(
+            result,
+            new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+    }
+    catch (JSException ex)
+    {
+        errorMessage = $"Registration error: {ex.Message}";
+    }
+    finally
+    {
+        isLoading = false;
+    }
+}
+
+
+private async Task FetchLists()
+{
+    isLoading = true;
+    errorMessage = null;
+    responseJson = null;
+
+    try
+    {
+        firebaseModule ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/js/firebaseClient.bundle.js");
+
+        var result = await firebaseModule.InvokeAsync<JsonElement>(
+            "fetchMyLists");
+
+        responseJson = JsonSerializer.Serialize(
+            result,
+            new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+    }
+    catch (JSException ex)
+    {
+        errorMessage = $"Data Connect error: {ex.Message}";
+    }
+    finally
+    {
+        isLoading = false;
+    }
+}
+
+}

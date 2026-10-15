@@ -73,3 +73,5 @@ appsettings.Development.local.json
 *.pfx
 *.p12
 serviceAccountKey.json
+
+node_modules/

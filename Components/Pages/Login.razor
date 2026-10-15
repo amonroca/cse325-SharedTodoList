@@ -1,0 +1,127 @@
+
+@page "/login"
+@layout cse325_SharedTodoList.Components.Layout.LoginLayout
+@rendermode InteractiveServer
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Sign In - SharedTodoList</PageTitle>
+
+<div class="login-card">
+    <div class="login-icon">✓</div>
+
+    <h1>Welcome to SharedTodoList</h1>
+
+    <p>
+        Organize your tasks, manage your lists,
+        and collaborate with others.
+    </p>
+
+    <button class="google-button"
+            @onclick="SignInWithGoogle"
+            disabled="@isSigningIn">
+        @(isSigningIn ? "Signing in..." : "Continue with Google")
+    </button>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <p class="login-error" role="alert">@errorMessage</p>
+    }
+
+    <small>
+        Sign in to access your lists and tasks.
+    </small>
+</div>
+
+
+@code {
+    private IJSObjectReference? firebaseModule;
+    private bool isSigningIn;
+    private string? errorMessage;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                firebaseModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/js/firebaseClient.bundle.js");
+            }
+            catch (JSException)
+            {
+                errorMessage = "Unable to load Firebase Authentication.";
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task SignInWithGoogle()
+    {
+        if (firebaseModule is null)
+        {
+            errorMessage = "Firebase Authentication is not ready.";
+            return;
+        }
+
+        isSigningIn = true;
+        errorMessage = null;
+
+        try
+        {
+            // Authenticate with Google and receive a Firebase ID token.
+            // The server must verify this token before granting access.
+            var idToken = await firebaseModule.InvokeAsync<string>(
+                "signInWithGoogle");
+
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                errorMessage = "Authentication did not return a valid token.";
+                return;
+            }
+
+            // Verify or create the user's Data Connect profile.
+            await firebaseModule.InvokeVoidAsync("ensureUserProfile");
+
+            // Establish the authenticated ASP.NET Core session.
+            await firebaseModule.InvokeVoidAsync(
+                "createServerSession", idToken);
+
+            // Reload the application with the authenticated session.
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (JSException ex)
+        {
+            if (ex.Message.Contains("auth/popup-closed-by-user"))
+            {
+                errorMessage = "Google sign-in was canceled.";
+            }
+            else
+            {
+                errorMessage = "Google sign-in failed. Please try again.";
+            }
+        }
+        finally
+        {
+            isSigningIn = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (firebaseModule is not null)
+        {
+            try
+            {
+                await firebaseModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The Blazor connection has already been closed.
+            }
+        }
+    }
+}
+

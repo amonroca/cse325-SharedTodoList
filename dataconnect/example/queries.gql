@@ -5,3 +5,32 @@ query GetTodoLists @auth(level: NO_ACCESS) {
     description
   }
 }
+
+
+query GetCurrentUser @auth(level: USER) {
+  users(where: {
+    uid: { eq_expr: "auth.uid" }
+  }) {
+    id
+    uid
+    email
+    displayName
+  }
+}
+
+
+query GetMyLists @auth(level: USER) {
+  todoLists(
+    where: {
+      owner: {
+        uid: {
+          eq_expr: "auth.uid"
+        }
+      }
+    }
+  ) {
+    id
+    title
+    description
+  }
+}

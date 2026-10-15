@@ -1,0 +1,394 @@
+
+@page "/lists/{ListId:guid}"
+@rendermode InteractiveServer
+
+@using cse325_SharedTodoList.Models
+@using cse325_SharedTodoList.Services
+
+@inject TodoListService TodoService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<PageTitle>List Details - SharedTodoList</PageTitle>
+
+@if (currentList is null)
+{
+    <div class="list-details">
+        <h2>List Not Found</h2>
+        <p>The requested list does not exist.</p>
+
+        <button @onclick="GoBack">
+            Back to Home
+        </button>
+    </div>
+}
+else
+{
+    <div class="list-details">
+        <button class="back-button" @onclick="GoBack">
+            ← Back to Home
+        </button>
+
+        <div class="list-header">
+            <h1>@currentList.Title</h1>
+
+            @if (!string.IsNullOrWhiteSpace(currentList.Description))
+            {
+                <p>@currentList.Description</p>
+            }
+            <button class="edit-list-button" @onclick="StartEditingList">
+                Edit List
+            </button>
+            <button class="delete-list-button" @onclick="ShowDeleteConfirmation">
+                Delete List
+            </button>
+        </div>
+
+        @if (isEditingList)
+        {
+            <div class="list-edit-form">
+                <h3>Edit List</h3>
+
+                <label for="edit-list-title">List Name</label>
+                <input id="edit-list-title"
+                    type="text"
+                    @bind="editListTitle" />
+
+                <label for="edit-list-description">Description</label>
+                <textarea id="edit-list-description"
+                        @bind="editListDescription">
+                </textarea>
+
+                <div class="list-form-actions">
+                    <button @onclick="CancelEditingList">
+                        Cancel
+                    </button>
+
+                    <button @onclick="SaveListChanges"
+                            disabled="@string.IsNullOrWhiteSpace(editListTitle)">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        }
+        
+        @if (showDeleteConfirmation)
+        {
+            <div class="delete-confirmation">
+                <h3>Delete List?</h3>
+
+                <p>
+                    Are you sure you want to delete this list?
+                    All tasks inside it will also be deleted.
+                    This action cannot be undone.
+                </p>
+
+                <div class="list-form-actions">
+                    <button @onclick="CancelDelete">
+                        Cancel
+                    </button>
+
+                    <button class="confirm-delete-button"
+                            @onclick="ConfirmDelete">
+                        Delete List
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="list-summary">
+            <div class="summary-card">
+                <span>Total Tasks</span>
+                <strong>@currentList.TotalTasks</strong>
+            </div>
+
+            <div class="summary-card">
+                <span>Pending</span>
+                <strong>@currentList.PendingTasks</strong>
+            </div>
+
+            <div class="summary-card">
+                <span>Completed</span>
+                <strong>@currentList.CompletedTasks</strong>
+            </div>
+        </div>
+
+        <div class="tasks-section">
+            <div class="section-header">
+                <h2>Tasks</h2>
+
+                <button class="add-task-button" @onclick="ShowTaskForm">
+                    + Add Task
+                </button>
+            </div>
+
+            @if (showTaskForm)
+            {
+                <div class="task-form">
+                    <h3>Create New Task</h3>
+
+                    <input
+                        type="text"
+                        placeholder="Task Title"
+                        @bind="taskTitle" />
+
+                    <textarea
+                        placeholder="Task Description (optional)"
+                        @bind="taskInformation">
+                    </textarea>
+
+                    <div class="task-form-actions">
+                        <button @onclick="CancelTask">
+                            Cancel
+                        </button>
+
+                        <button @onclick="CreateTask"
+                                disabled="@string.IsNullOrWhiteSpace(taskTitle)">
+                            Save Task
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (currentList.Items.Count == 0)
+            {
+                <div class="empty-state">
+                    <h3>No Tasks Yet</h3>
+                    <p>Create your first task to get started.</p>
+                </div>
+            }
+            else
+            {         
+                @if (editingTaskId.HasValue)
+                {
+                    <div class="task-form">
+                        <h3>Edit Task</h3>
+
+                        <input type="text"
+                            placeholder="Task Title"
+                            @bind="editTaskTitle" />
+
+                        <textarea placeholder="Task Description (optional)"
+                                @bind="editTaskInformation">
+                        </textarea>
+
+                        <div class="task-form-actions">
+                            <button @onclick="CancelEditingTask">
+                                Cancel
+                            </button>
+
+                            <button @onclick="SaveTaskChanges"
+                                    disabled="@string.IsNullOrWhiteSpace(editTaskTitle)">
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                }
+                <div class="task-list">
+                    @foreach (var task in currentList.Items)
+                    {
+                        <div class="task-card @(task.IsCompleted ? "completed" : "")"
+                            @key="task.Id">
+
+                            <div class="task-checkbox">
+                                <input type="checkbox"
+                                    checked="@task.IsCompleted"
+                                    @onchange="() => ToggleTask(task.Id)"
+                                    aria-label="Toggle task completion" />
+                            </div>
+
+                            <div class="task-content">
+                                <h3>@task.Title</h3>
+
+                                @if (!string.IsNullOrWhiteSpace(task.Information))
+                                {
+                                    <p>@task.Information</p>
+                                }
+
+                                <small>
+                                    Created:
+                                    @task.CreatedDate.ToLocalTime().ToString("MMM dd, yyyy")
+                                </small>
+                            </div>
+
+                            <div class="task-actions">
+                                <span class="task-status @(task.IsCompleted ? "status-completed" : "")">
+                                    @(task.IsCompleted ? "Completed" : "Pending")
+                                </span>
+
+                                <button class="edit-task-button"
+                                    @onclick="() => StartEditingTask(task.Id)">
+                                    Edit
+                                </button>
+                                <button class="delete-task-button"
+                                        @onclick="() => DeleteTask(task.Id)"
+                                        aria-label="Delete task"
+                                        title="Delete task">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid ListId { get; set; }
+
+    private TodoListModel? currentList;
+    private bool showTaskForm = false;
+    private string taskTitle = string.Empty;
+    private string taskInformation = string.Empty;
+    private Guid? editingTaskId;
+    private string editTaskTitle = string.Empty;
+    private string editTaskInformation = string.Empty;
+    private bool isEditingList;
+    private string editListTitle = string.Empty;
+    private string editListDescription = string.Empty;
+    private bool showDeleteConfirmation;
+
+    protected override void OnParametersSet()
+    {
+        currentList = TodoService.GetListById(ListId);
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void ShowTaskForm()
+    {
+        showTaskForm = true;
+    }
+
+    private void CancelTask()
+    {
+        showTaskForm = false;
+        taskTitle = string.Empty;
+        taskInformation = string.Empty;
+    }
+
+    private void CreateTask()
+    {
+        if (currentList is null ||
+            string.IsNullOrWhiteSpace(taskTitle))
+        {
+            return;
+        }
+
+        TodoService.AddTask(
+            currentList.Id,
+            taskTitle,
+            taskInformation);
+
+        CancelTask();
+    }
+    private void ToggleTask(Guid taskId)
+    {
+        if (currentList is null)
+            return;
+
+        TodoService.ToggleTaskCompletion(currentList.Id, taskId);
+    }
+
+    private void DeleteTask(Guid taskId)
+    {
+        if (currentList is null)
+            return;
+
+        TodoService.DeleteTask(currentList.Id, taskId);
+    }
+
+    private void StartEditingTask(Guid taskId)
+    {
+        var task = currentList?.Items
+            .FirstOrDefault(item => item.Id == taskId);
+
+        if (task is null)
+            return;
+
+        editingTaskId = task.Id;
+        editTaskTitle = task.Title;
+        editTaskInformation = task.Information;
+    }
+    private void SaveTaskChanges()
+    {
+        if (currentList is null ||
+            !editingTaskId.HasValue ||
+            string.IsNullOrWhiteSpace(editTaskTitle))
+            return;
+
+        TodoService.UpdateTask(
+            currentList.Id,
+            editingTaskId.Value,
+            editTaskTitle,
+            editTaskInformation
+        );
+
+        CancelEditingTask();
+    }
+
+    private void CancelEditingTask()
+    {
+        editingTaskId = null;
+        editTaskTitle = string.Empty;
+        editTaskInformation = string.Empty;
+    }
+    private void StartEditingList()
+    {
+        if (currentList is null)
+            return;
+
+        editListTitle = currentList.Title;
+        editListDescription = currentList.Description;
+        isEditingList = true;
+    }
+
+    private void SaveListChanges()
+    {
+        if (currentList is null ||
+            string.IsNullOrWhiteSpace(editListTitle))
+            return;
+
+        TodoService.UpdateList(
+            currentList.Id,
+            editListTitle,
+            editListDescription);
+
+        CancelEditingList();
+    }
+
+    private void CancelEditingList()
+    {
+        isEditingList = false;
+        editListTitle = string.Empty;
+        editListDescription = string.Empty;
+    }
+    private void ShowDeleteConfirmation()
+    {
+        showDeleteConfirmation = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirmation = false;
+    }
+
+    private void ConfirmDelete()
+    {
+        if (currentList is null)
+            return;
+
+        if (TodoService.DeleteList(currentList.Id))
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+}
