@@ -5,11 +5,12 @@
 @using System.Security.Claims
 @inject TodoService Todos
 @inject ListChangeNotifier Notifier
+@inject ILogger<Home> Logger
 
 <PageTitle>@(activeList?.Name ?? "My lists") · Shared Todo</PageTitle>
 
 <div class="dashboard">
-    <aside class="sidebar @(sidebarOpen ? "open" : "")">
+    <aside class="sidebar @(sidebarOpen ? "open" : "")" aria-label="Your lists">
         <div class="sidebar-top mobile-only">
             <strong>Lists</strong>
             <button class="icon-btn" @onclick="() => sidebarOpen = false" aria-label="Close menu"><Icon Name="x" /></button>
@@ -20,7 +21,7 @@
         </button>
 
         <nav class="list-nav">
-            <h3 class="section-label">My lists</h3>
+            <h2 class="section-label">My lists</h2>
             <ul>
                 @foreach (var l in lists.Where(l => l.Role == ListRole.Owner))
                 {
@@ -34,7 +35,7 @@
 
             @if (lists.Any(l => l.Role != ListRole.Owner))
             {
-                <h3 class="section-label">Shared with me</h3>
+                <h2 class="section-label">Shared with me</h2>
                 <ul>
                     @foreach (var l in lists.Where(l => l.Role != ListRole.Owner))
                     {
@@ -49,7 +50,7 @@
         <div class="scrim" @onclick="() => sidebarOpen = false"></div>
     }
 
-    <section class="main">
+    <section class="main" aria-label="Tasks in the selected list">
         <header class="topbar">
             <button class="icon-btn mobile-only" @onclick="() => sidebarOpen = true" aria-label="Open lists"><Icon Name="menu" /></button>
             @if (activeList is not null)
@@ -83,15 +84,24 @@
 
         @if (error is not null)
         {
-            <div class="alert dismissable">
+            <div class="error-banner dismissable" role="alert">
                 @error
-                <button class="icon-btn" @onclick="() => error = null" aria-label="Dismiss"><Icon Name="x" Size="16" /></button>
+                <button class="icon-btn" @onclick="() => error = null" aria-label="Dismiss message"><Icon Name="x" Size="16" /></button>
             </div>
         }
 
-        @if (!loaded)
+        @if (loadFailed)
         {
-            <div class="empty"><div class="spinner"></div></div>
+            <div class="error-panel" role="alert">
+                <div class="empty-icon"><Icon Name="x" Size="28" /></div>
+                <h2>We couldn't load your lists</h2>
+                <p class="muted">Check your internet connection and try again.</p>
+                <button class="btn btn-primary" @onclick="RetryLoad">Try again</button>
+            </div>
+        }
+        else if (!loaded)
+        {
+            <div class="empty" role="status"><div class="spinner"></div><span class="sr-only">Loading your lists…</span></div>
         }
         else if (activeList is null)
         {
@@ -105,22 +115,22 @@
         else
         {
             <div class="content">
-                <div class="meter" aria-label="@Progress% complete">
+                <div class="meter" role="progressbar" aria-label="List progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@Progress">
                     <div class="meter-fill" style="width:@(Progress)%;background:@activeList.Color"></div>
                 </div>
 
                 <TaskComposer OnAdd="AddTask" />
 
                 <div class="toolbar">
-                    <div class="segmented" role="tablist">
+                    <div class="segmented" role="group" aria-label="Show tasks">
                         @foreach (var f in Enum.GetValues<Filter>())
                         {
-                            <button role="tab" aria-selected="@(filter == f)" class="@(filter == f ? "on" : "")" @onclick="() => filter = f">@f</button>
+                            <button type="button" aria-pressed="@(filter == f ? "true" : "false")" class="@(filter == f ? "on" : "")" @onclick="() => filter = f">@f</button>
                         }
                     </div>
                     <label class="search">
                         <Icon Name="search" Size="16" />
-                        <input @bind="search" @bind:event="oninput" placeholder="Search tasks" />
+                        <input type="search" @bind="search" @bind:event="oninput" placeholder="Search tasks" aria-label="Search tasks" />
                     </label>
                 </div>
 
@@ -134,20 +144,30 @@
                 }
                 else
                 {
-                    <ul class="task-list">
-                        @foreach (var t in VisibleTasks)
-                        {
-                            <TaskRow @key="t.Id" Item="t"
-                                     OnToggle="() => Run(() => Todos.SetCompletedAsync(userId, t.Id, !t.Completed))"
-                                     OnDelete="() => Run(() => Todos.DeleteTaskAsync(userId, t.Id))"
-                                     OnSave="(title, notes, due, priority) => Run(() => Todos.UpdateTaskAsync(userId, t.Id, title, notes, due, priority))" />
-                        }
-                    </ul>
+                    <ErrorBoundary @ref="taskErrorBoundary">
+                        <ChildContent>
+                            <ul class="task-list" aria-label="Tasks">
+                                @foreach (var t in VisibleTasks)
+                                {
+                                    <TaskRow @key="t.Id" Item="t"
+                                             OnToggle="() => ToggleTask(t)"
+                                             OnDelete="() => DeleteTask(t)"
+                                             OnSave="(title, notes, due, priority) => SaveTask(t, title, notes, due, priority)" />
+                                }
+                            </ul>
+                        </ChildContent>
+                        <ErrorContent>
+                            <div class="error-panel" role="alert">
+                                <p>Something went wrong showing these tasks.</p>
+                                <button class="btn btn-ghost" @onclick="RecoverTasks">Reload tasks</button>
+                            </div>
+                        </ErrorContent>
+                    </ErrorBoundary>
                 }
 
                 @if (DoneCount > 0 && filter != Filter.Active)
                 {
-                    <button class="link-btn clear-done" @onclick="() => Run(() => Todos.ClearCompletedAsync(userId, activeList.Id))">
+                    <button class="link-btn clear-done" @onclick="ClearCompleted">
                         Clear @DoneCount completed
                     </button>
                 }
@@ -155,6 +175,9 @@
         }
     </section>
 </div>
+
+@* Announces changes to screen reader users. *@
+<div class="sr-only" role="status" aria-live="polite">@announcement</div>
 
 @switch (dialog)
 {
@@ -201,6 +224,9 @@
     private Dialog dialog;
     private bool sidebarOpen;
     private string? error;
+    private string? announcement;
+    private bool loadFailed;
+    private ErrorBoundary? taskErrorBoundary;
 
     private ListSummary? activeList => lists.FirstOrDefault(l => l.Id == activeId);
     private int DoneCount => tasks.Count(t => t.Completed);
@@ -215,7 +241,9 @@
 
     private RenderFragment ListLink(ListSummary l) =>
         @<li>
-            <button class="list-link @(l.Id == activeId ? "active" : "")" @onclick="() => SelectList(l.Id)">
+            <button class="list-link @(l.Id == activeId ? "active" : "")" @onclick="() => SelectList(l.Id)"
+                    aria-current="@(l.Id == activeId ? "true" : null)"
+                    aria-label="@($"{l.Name}, {l.TaskCount - l.DoneCount} open tasks{(l.MemberCount > 1 ? ", shared" : "")}")">
                 <span class="list-dot" style="background:@l.Color"></span>
                 <span class="list-name">@l.Name</span>
                 @if (l.MemberCount > 1)
@@ -231,8 +259,34 @@
         var user = (await AuthState).User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier)!;
         Notifier.ListChanged += OnListChanged;
-        await Reload();
-        loaded = true;
+        await LoadInitial();
+    }
+
+    private async Task LoadInitial()
+    {
+        try
+        {
+            await Reload();
+            loadFailed = false;
+            loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load lists for user {UserId}", userId);
+            loadFailed = true;
+        }
+    }
+
+    private Task RetryLoad()
+    {
+        loadFailed = false;
+        return LoadInitial();
+    }
+
+    private async Task RecoverTasks()
+    {
+        await Run(() => Task.CompletedTask);
+        taskErrorBoundary?.Recover();
     }
 
     // Re-reads lists and the active list's tasks. Used after every change, ours or a collaborator's.
@@ -251,9 +305,10 @@
             await Reload();
             StateHasChanged();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Ignore: the next change or user action will refresh again.
+            // Not fatal: the next change or user action refreshes again.
+            Logger.LogWarning(ex, "Live refresh failed after list {ListId} changed", listId);
         }
     });
 
@@ -266,23 +321,55 @@
         await Run(() => Task.CompletedTask);
     }
 
-    // Runs an action, shows friendly errors, and refreshes the data.
-    private async Task Run(Func<Task> action)
+    // Runs an action, shows a friendly error if it fails, announces success to
+    // screen readers, and refreshes the data so the UI matches the database.
+    private async Task Run(Func<Task> action, string? successMessage = null)
     {
         error = null;
         try
         {
             await action();
+            announcement = successMessage;
         }
         catch (TodoException ex)
         {
             error = ex.Message;
         }
-        await Reload();
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Action failed for user {UserId}", userId);
+            error = "Something went wrong and your change may not have been saved. Check your connection and try again.";
+        }
+
+        try
+        {
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Refresh failed for user {UserId}", userId);
+            error ??= "We couldn't refresh your lists. Check your connection and try again.";
+        }
+    }
+
+    private Task ToggleTask(TodoTask t) =>
+        Run(() => Todos.SetCompletedAsync(userId, t.Id, !t.Completed),
+            t.Completed ? $"“{t.Title}” marked as not done" : $"“{t.Title}” completed");
+
+    private Task DeleteTask(TodoTask t) =>
+        Run(() => Todos.DeleteTaskAsync(userId, t.Id), $"“{t.Title}” deleted");
+
+    private Task SaveTask(TodoTask t, string title, string notes, DateOnly? dueDate, TaskPriority priority) =>
+        Run(() => Todos.UpdateTaskAsync(userId, t.Id, title, notes, dueDate, priority), "Task saved");
+
+    private Task ClearCompleted()
+    {
+        var count = DoneCount;
+        return Run(() => Todos.ClearCompletedAsync(userId, activeId!.Value), $"{count} completed task{(count == 1 ? "" : "s")} cleared");
     }
 
     private Task AddTask(string title, DateOnly? dueDate, TaskPriority priority) =>
-        Run(() => Todos.AddTaskAsync(userId, activeId!.Value, title, dueDate, priority));
+        Run(() => Todos.AddTaskAsync(userId, activeId!.Value, title, dueDate, priority), $"“{title.Trim()}” added");
 
     private async Task CreateList(string name, string color)
     {
@@ -295,20 +382,20 @@
         var id = activeId!.Value;
         dialog = Dialog.None;
         activeId = null;
-        await Run(() => Todos.DeleteListAsync(userId, id));
+        await Run(() => Todos.DeleteListAsync(userId, id), "List deleted");
     }
 
     private async Task LeftList()
     {
         dialog = Dialog.None;
         activeId = null;
-        await Reload();
+        await Run(() => Task.CompletedTask, "You left the list");
     }
 
     private async Task CloseDialog()
     {
         dialog = Dialog.None;
-        await Reload();
+        await Run(() => Task.CompletedTask);
     }
 
     public void Dispose() => Notifier.ListChanged -= OnListChanged;

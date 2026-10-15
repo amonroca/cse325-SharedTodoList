@@ -9,6 +9,8 @@
     <script>
         // Match Bootstrap's theme (used by the account pages) to the system color scheme.
         if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.bsTheme = 'dark';
+        // Remember the last focused element outside a dialog so dialogs can return focus to it when they close.
+        document.addEventListener('focusin', e => { if (!e.target.closest('.dialog')) window.lastFocusOutsideDialog = e.target; });
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />

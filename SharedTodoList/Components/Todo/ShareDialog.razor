@@ -1,11 +1,12 @@
 @inject TodoService Todos
+@inject ILogger<ShareDialog> Logger
 
 <Modal Title="@($"Share “{ListName}”")" OnClose="OnClose">
     <div class="dialog-body">
         @if (IsOwner)
         {
             <form class="invite-row" @onsubmit="Invite">
-                <input @ref="emailInput" type="email" @bind="email" @bind:event="oninput" placeholder="Invite by email" />
+                <input @ref="emailInput" type="email" @bind="email" @bind:event="oninput" placeholder="Invite by email" aria-label="Email address to invite" />
                 <button type="submit" class="btn btn-primary" disabled="@(busy || string.IsNullOrWhiteSpace(email))">
                     @(busy ? "Adding…" : "Invite")
                 </button>
@@ -18,11 +19,11 @@
 
         @if (error is not null)
         {
-            <div class="alert">@error</div>
+            <div class="error-banner" role="alert">@error</div>
         }
 
-        <h3 class="section-label">People with access</h3>
-        <ul class="member-list">
+        <h2 class="section-label">People with access</h2>
+        <ul class="member-list" aria-label="People with access">
             @foreach (var m in members)
             {
                 var isMe = m.UserId == CurrentUserId;
@@ -57,7 +58,18 @@
     private string? error;
     private bool busy;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load members of list {ListId}", ListId);
+            error = ex is TodoException ? ex.Message : "We couldn't load who has access. Try again in a moment.";
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -81,6 +93,11 @@
         {
             error = ex.Message;
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "{Dialog} action failed", GetType().Name);
+            error = "Something went wrong. Check your connection and try again.";
+        }
         finally
         {
             busy = false;
@@ -103,6 +120,11 @@
         catch (TodoException ex)
         {
             error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "{Dialog} action failed", GetType().Name);
+            error = "Something went wrong. Check your connection and try again.";
         }
     }
 }

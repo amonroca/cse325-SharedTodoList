@@ -1,3 +1,5 @@
+@inject ILogger<ListDialog> Logger
+
 <Modal Title="@Title" OnClose="OnClose">
     <form class="dialog-body" @onsubmit="Submit">
         <label class="field">
@@ -6,17 +8,18 @@
         </label>
         <div class="field">
             <span>Color</span>
-            <div class="swatches">
+            <div class="swatches" role="radiogroup" aria-label="List color">
                 @foreach (var c in Colors)
                 {
                     <button type="button" class="swatch @(c == color ? "selected" : "")" style="background:@c"
-                            @onclick="() => color = c" aria-label="Color @c"></button>
+                            @onclick="() => color = c"
+                            role="radio" aria-checked="@(c == color ? "true" : "false")" aria-label="@ColorNames[c]"></button>
                 }
             </div>
         </div>
         @if (error is not null)
         {
-            <div class="alert">@error</div>
+            <div class="error-banner" role="alert">@error</div>
         }
         <footer class="dialog-footer">
             <button type="button" class="btn btn-ghost" @onclick="OnClose">Cancel</button>
@@ -29,6 +32,12 @@
 
 @code {
     public static readonly string[] Colors = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#8b5cf6", "#ef4444", "#64748b"];
+
+    private static readonly Dictionary<string, string> ColorNames = new()
+    {
+        ["#6366f1"] = "Indigo", ["#ec4899"] = "Pink", ["#f59e0b"] = "Amber", ["#10b981"] = "Green",
+        ["#0ea5e9"] = "Sky blue", ["#8b5cf6"] = "Violet", ["#ef4444"] = "Red", ["#64748b"] = "Slate",
+    };
 
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string SubmitLabel { get; set; } = "";
@@ -67,6 +76,11 @@
         catch (TodoException ex)
         {
             error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "{Dialog} action failed", GetType().Name);
+            error = "Something went wrong. Check your connection and try again.";
         }
         finally
         {

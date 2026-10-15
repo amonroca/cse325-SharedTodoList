@@ -2,8 +2,8 @@
 {
     <li class="task editing">
         <form class="task-edit" @onsubmit="Save">
-            <input @ref="titleInput" @bind="title" @bind:event="oninput" aria-label="Title" maxlength="200" />
-            <textarea @bind="notes" placeholder="Notes (optional)" rows="2"></textarea>
+            <input @ref="titleInput" @bind="title" @bind:event="oninput" aria-label="Task title" maxlength="200" @onkeydown="OnEditKeyDown" />
+            <textarea @bind="notes" placeholder="Notes (optional)" rows="2" aria-label="Notes" maxlength="2000" @onkeydown="OnEditKeyDown"></textarea>
             <div class="task-edit-row">
                 <input type="date" @bind="dueDate" aria-label="Due date" />
                 <select @bind="priority" aria-label="Priority">
@@ -22,12 +22,12 @@ else
 {
     var overdue = !Item.Completed && DueDates.IsOverdue(Item.DueDate);
     <li class="task @(Item.Completed ? "done" : "")">
-        <button class="checkbox @(Item.Completed ? "checked" : "")" @onclick="OnToggle"
-                aria-label="@(Item.Completed ? "Mark as not done" : "Mark as done")">
+        <button type="button" class="checkbox @(Item.Completed ? "checked" : "")" @onclick="OnToggle"
+                role="checkbox" aria-checked="@(Item.Completed ? "true" : "false")" aria-label="@($"Done: {Item.Title}")">
             <Icon Name="check" Size="14" />
         </button>
 
-        <div class="task-body" @ondblclick="StartEditing">
+        <div class="task-body" @ondblclick="StartEditing" title="Double-click to edit">
             <div class="task-title">@Item.Title</div>
             @if (!string.IsNullOrEmpty(Item.Notes))
             {
@@ -51,8 +51,8 @@ else
         </div>
 
         <div class="task-actions">
-            <button class="icon-btn" @onclick="StartEditing" aria-label="Edit task" title="Edit"><Icon Name="edit" Size="16" /></button>
-            <button class="icon-btn danger" @onclick="OnDelete" aria-label="Delete task" title="Delete"><Icon Name="trash" Size="16" /></button>
+            <button class="icon-btn" @onclick="StartEditing" aria-label="@($"Edit {Item.Title}")" title="Edit"><Icon Name="edit" Size="16" /></button>
+            <button class="icon-btn danger" @onclick="OnDelete" aria-label="@($"Delete {Item.Title}")" title="Delete"><Icon Name="trash" Size="16" /></button>
         </div>
     </li>
 }
@@ -88,6 +88,12 @@ else
             focusPending = false;
             await titleInput.FocusAsync();
         }
+    }
+
+    // Escape cancels editing without saving.
+    private void OnEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") editing = false;
     }
 
     private async Task Save()

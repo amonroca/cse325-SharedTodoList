@@ -1,8 +1,12 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
 <div class="dialog-backdrop" @onclick="OnClose">
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="@Title" @onclick:stopPropagation="true">
+    <div @ref="dialogRef" class="dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" tabindex="-1"
+         @onclick:stopPropagation="true" @onkeydown="OnKeyDown">
         <header class="dialog-header">
-            <h2>@Title</h2>
-            <button class="icon-btn" @onclick="OnClose" aria-label="Close"><Icon Name="x" /></button>
+            <h2 id="@titleId">@Title</h2>
+            <button type="button" class="icon-btn" @onclick="OnClose" aria-label="Close dialog"><Icon Name="x" /></button>
         </header>
         @ChildContent
     </div>
@@ -12,4 +16,43 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly string titleId = $"dialog-title-{Guid.NewGuid():N}";
+    private ElementReference dialogRef;
+    private IJSObjectReference? module;
+    private IJSObjectReference? handle;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // Traps Tab focus inside the dialog and restores focus when it closes.
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/dialog.js");
+            handle = await module.InvokeAsync<IJSObjectReference>("open", dialogRef);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The user navigated away before the dialog finished opening.
+        }
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (handle is not null)
+            {
+                await handle.InvokeVoidAsync("close");
+                await handle.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone, so there is nothing left to clean up.
+        }
+    }
 }

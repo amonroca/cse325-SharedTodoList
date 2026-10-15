@@ -1,19 +1,32 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using SharedTodoList.Data;
 
 namespace SharedTodoList.Services;
 
+/// <summary>A list as shown in the sidebar, with the current user's role and task counts.</summary>
 public record ListSummary(int Id, string Name, string Color, ListRole Role, int TaskCount, int DoneCount, int MemberCount);
 
+/// <summary>A person who has access to a list.</summary>
 public record MemberInfo(string UserId, string Name, string Email, ListRole Role);
 
-// An error that is safe to show to the user.
+/// <summary>An expected error whose message is safe to show to the user (validation, permissions, not found).</summary>
 public class TodoException(string message) : Exception(message);
 
-public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, ListChangeNotifier notifier)
+/// <summary>
+/// All reads and writes for lists, sharing, and tasks. Every method takes the signed-in user's id
+/// and checks that they are allowed to perform the action, so the UI never has to.
+/// After each change it notifies <see cref="ListChangeNotifier"/> so collaborators see it live.
+/// </summary>
+public partial class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, ListChangeNotifier notifier)
 {
+    public const int MaxListNameLength = 100;
+    public const int MaxTitleLength = 200;
+    public const int MaxNotesLength = 2000;
+
     // ---------- Lists ----------
 
+    /// <summary>Returns every list the user owns or that has been shared with them, oldest first.</summary>
     public async Task<List<ListSummary>> GetListsAsync(string userId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -31,10 +44,11 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
             .ToListAsync();
     }
 
+    /// <summary>Creates a list owned by the user and returns its id.</summary>
     public async Task<int> CreateListAsync(string userId, string name, string color)
     {
-        name = name.Trim();
-        if (name.Length == 0) throw new TodoException("List name is required.");
+        name = ValidateListName(name);
+        color = ValidateColor(color);
 
         await using var db = await dbFactory.CreateDbContextAsync();
         var list = new TodoList { Name = name, Color = color, OwnerId = userId };
@@ -44,10 +58,11 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         return list.Id;
     }
 
+    /// <summary>Renames or recolors a list. Owner only.</summary>
     public async Task UpdateListAsync(string userId, int listId, string name, string color)
     {
-        name = name.Trim();
-        if (name.Length == 0) throw new TodoException("List name is required.");
+        name = ValidateListName(name);
+        color = ValidateColor(color);
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await RequireOwnerAsync(db, listId, userId);
@@ -56,6 +71,7 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         notifier.Notify(listId);
     }
 
+    /// <summary>Deletes a list and all of its tasks for everyone. Owner only.</summary>
     public async Task DeleteListAsync(string userId, int listId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -66,6 +82,7 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
 
     // ---------- Sharing ----------
 
+    /// <summary>Returns everyone with access to the list, owner first.</summary>
     public async Task<List<MemberInfo>> GetMembersAsync(string userId, int listId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -77,8 +94,12 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
             .ToListAsync();
     }
 
+    /// <summary>Shares the list with an existing user, found by email. Owner only.</summary>
     public async Task AddMemberAsync(string userId, int listId, string email)
     {
+        email = email.Trim();
+        if (!EmailPattern().IsMatch(email)) throw new TodoException("Enter a valid email address.");
+
         await using var db = await dbFactory.CreateDbContextAsync();
         await RequireOwnerAsync(db, listId, userId);
 
@@ -94,7 +115,10 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         notifier.Notify(listId);
     }
 
-    // Owners can remove anyone except themselves; editors can only remove themselves (leave).
+    /// <summary>
+    /// Removes someone from a list. Owners can remove anyone except themselves;
+    /// editors can only remove themselves (leave the list).
+    /// </summary>
     public async Task RemoveMemberAsync(string userId, int listId, string targetUserId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -111,6 +135,7 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
 
     // ---------- Tasks ----------
 
+    /// <summary>Returns the list's tasks: open before done, then by due date (soonest first), then newest.</summary>
     public async Task<List<TodoTask>> GetTasksAsync(string userId, int listId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -126,10 +151,10 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
             .ToListAsync();
     }
 
+    /// <summary>Adds a task to a list the user has access to.</summary>
     public async Task AddTaskAsync(string userId, int listId, string title, DateOnly? dueDate, TaskPriority priority)
     {
-        title = title.Trim();
-        if (title.Length == 0) throw new TodoException("Task title is required.");
+        title = ValidateTitle(title);
 
         await using var db = await dbFactory.CreateDbContextAsync();
         await RequireMemberAsync(db, listId, userId);
@@ -138,23 +163,27 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         notifier.Notify(listId);
     }
 
+    /// <summary>Updates a task's details.</summary>
     public Task UpdateTaskAsync(string userId, int taskId, string title, string notes, DateOnly? dueDate, TaskPriority priority)
     {
-        title = title.Trim();
-        if (title.Length == 0) throw new TodoException("Task title is required.");
+        title = ValidateTitle(title);
+        notes = notes.Trim();
+        if (notes.Length > MaxNotesLength) throw new TodoException($"Notes can be at most {MaxNotesLength} characters.");
 
         return ChangeTaskAsync(userId, taskId, t =>
         {
             t.Title = title;
-            t.Notes = notes.Trim();
+            t.Notes = notes;
             t.DueDate = dueDate;
             t.Priority = priority;
         });
     }
 
+    /// <summary>Marks a task as done or not done.</summary>
     public Task SetCompletedAsync(string userId, int taskId, bool completed) =>
         ChangeTaskAsync(userId, taskId, t => t.Completed = completed);
 
+    /// <summary>Deletes a single task.</summary>
     public async Task DeleteTaskAsync(string userId, int taskId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -164,6 +193,7 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         notifier.Notify(task.ListId);
     }
 
+    /// <summary>Deletes every completed task in a list.</summary>
     public async Task ClearCompletedAsync(string userId, int listId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
@@ -171,6 +201,33 @@ public class TodoService(IDbContextFactory<ApplicationDbContext> dbFactory, List
         await db.TodoTasks.Where(t => t.ListId == listId && t.Completed).ExecuteDeleteAsync();
         notifier.Notify(listId);
     }
+
+    // ---------- Validation ----------
+
+    private static string ValidateListName(string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0) throw new TodoException("List name is required.");
+        if (name.Length > MaxListNameLength) throw new TodoException($"List name can be at most {MaxListNameLength} characters.");
+        return name;
+    }
+
+    private static string ValidateTitle(string title)
+    {
+        title = title.Trim();
+        if (title.Length == 0) throw new TodoException("Task title is required.");
+        if (title.Length > MaxTitleLength) throw new TodoException($"Task title can be at most {MaxTitleLength} characters.");
+        return title;
+    }
+
+    private static string ValidateColor(string color) =>
+        HexColorPattern().IsMatch(color) ? color : throw new TodoException("Pick one of the list colors.");
+
+    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
+    private static partial Regex HexColorPattern();
+
+    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
+    private static partial Regex EmailPattern();
 
     // ---------- Helpers ----------
 

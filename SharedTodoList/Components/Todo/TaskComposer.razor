@@ -1,5 +1,5 @@
-<form class="composer" @onsubmit="Submit">
-    <span class="composer-plus"><Icon Name="plus" /></span>
+<form class="composer" @onsubmit="Submit" aria-label="Add a task">
+    <span class="composer-plus" aria-hidden="true"><Icon Name="plus" /></span>
     <input class="composer-input" @bind="title" @bind:event="oninput" placeholder="Add a task and press Enter"
            aria-label="New task title" maxlength="200" />
     <div class="composer-meta">
