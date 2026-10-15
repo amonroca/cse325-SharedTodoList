@@ -55,3 +55,21 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+.vs/
+*.user
+*.suo
+
+# Firebase local files
+.firebase/
+dataconnect/.dataconnect/
+firebase-debug.log
+dataconnect-debug.log
+pglite-debug.log
+*-debug.log
+
+# Local configuration and secrets
+appsettings.Development.local.json
+*.pfx
+*.p12
+serviceAccountKey.json

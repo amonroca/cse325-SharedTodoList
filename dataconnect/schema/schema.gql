@@ -1,0 +1,24 @@
+type User @table {
+  email: String!
+  displayName: String!
+}
+
+type TodoList @table {
+  title: String!
+  description: String
+  owner: User!
+}
+
+type TodoItem @table {
+  title: String!
+  information: String
+  createdDate: Timestamp!
+  complete: Boolean!
+  list: TodoList!
+}
+
+type ListMember @table(key: ["user", "list"]) {
+  user: User!
+  list: TodoList!
+  role: String!
+}

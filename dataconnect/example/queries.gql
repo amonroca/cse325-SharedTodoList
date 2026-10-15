@@ -1,0 +1,7 @@
+query GetTodoLists @auth(level: NO_ACCESS) {
+  todoLists {
+    id
+    title
+    description
+  }
+}
